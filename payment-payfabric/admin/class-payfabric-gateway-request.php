@@ -209,48 +209,17 @@ class PayFabric_Gateway_Request
         $order_id = $result->TrxUserDefine1;
         $order = wc_get_order($order_id);
         $order_status = $order->get_status();
-        if ($status == "approved") {
-            
-            // commented out by Phreesoft to change order status after payment finishes pending
-//            if ($transactionState == "pending capture") {
-//                if ($order_status != 'on-hold') {
-//                    //Auth transaction
-//                    update_post_meta($order->get_id(), '_payment_status', 'on-hold');
-//                    $order->update_status('on-hold', sprintf(__('Card payment authorized.', 'bizuno-api')));
-//
-//                    // Reduce stock levels
-//                    wc_reduce_stock_levels($order_id);
-//                }
-                
-            // set order status to 'processing' instead of 'on hold'
-            if ($transactionState == "pending capture") {
-                if ($order_status != 'processing') {
-                    // Auth transaction
-                    update_post_meta($order->get_id(), '_payment_status', 'processing');
-                    $order->update_status('processing', sprintf(__('Card payment authorized via PayFabric.', 'bizuno-api')));
-                    
-                    // Reduce stock levels
-                    wc_reduce_stock_levels($order_id);
-                }
-            }
-        } elseif (in_array($transactionState, array('pending settlement', 'settled', 'captured'))) {
-            if ($order_status != 'completed' && $order_status != 'processing') {
-                //Purchase transaction
-                update_post_meta($order->get_id(), '_payment_status', 'completed');
-                $order->payment_complete();
-                // commented out by Phreesoft to prevent orders from being tagged 'complete'
-//                    if ($this->gateway->api_success_status == '1') {
-//                        $order->update_status('completed', sprintf(__('Card payment completed.', 'bizuno-api')));
-//                    }
-                //                 do_action( 'woocommerce_payment_complete', $order_id);
-
-                // Reduce stock levels
-                wc_reduce_stock_levels($order_id);
-            }
+error_log("order_id = $order_id and status = $status and transState = $transactionState and order_status = $order_status order is an object = ".(is_object($order)? 'true' : 'false'));
+// This logic was completely re-written and simplified for Bizuno by PhreeSoft
+        if ( $status == "approved" ) {
+            $order->payment_complete();  // <-- Fires woocommerce_payment_complete automatically!
+            $order->update_meta_data( '_payment_status', 'processing' );
+            $order->add_order_note( sprintf( __( 'Card payment authorized via PayFabric.', 'bizuno-payfabric' ) ) );
         } else {
-            if ($order_status != 'failed') {
-                $order->update_status('failed', sprintf(__('Card payment failed.', 'bizuno-api')));
+            if ( $order_status !== 'failed' ) {
+                $order->update_status( 'failed', sprintf( __( 'Card payment failed.', 'bizuno-payfabric' ) ) );
             }
+            $order->save();  // Persist meta/note/status changes (HPOS-safe)
             return;
         }
 
@@ -268,7 +237,9 @@ class PayFabric_Gateway_Request
         }
 
         //save the EVO transaction ID into the database
-        update_post_meta($order->get_id(), '_transaction_id', $merchantTxId);
+        $order->update_meta_data('_transaction_id', $merchantTxId);
+//      update_post_meta($order->get_id(), '_transaction_id', $merchantTxId); // Fails in HPOS
+        $order->save();  // Persist meta/note/status changes (HPOS-safe)
     }
 
     //Include payfabric gateway js sdk in HTML
@@ -385,7 +356,7 @@ successCallback:handleResult, failureCallback:handleResult });
                 foreach ($form_data as $key => $value) {
                     $form_html .= "<input type='hidden' name='" . htmlentities($key) . "' value='" . htmlentities($value) . "'>";
                 }
-                $form_html .= '<button type="submit" class="button alt">' . __('Pay with PayFabric', 'bizuno-api') . '</button></form>';
+                $form_html .= '<button type="submit" class="button alt">' . __('Pay with PayFabric', 'bizuno-payfabric') . '</button></form>';
                 return $form_html;
             case '2':
                 $acceptedPaymentMethods = array("CreditCard","ECheck");
@@ -430,7 +401,7 @@ successCallback:handleResult, failureCallback:handleResult });
         if ($result->Result) {
             return true;
         } else {
-            throw new UnexpectedValueException( wp_kses_post ( __('Unable to update the transaction.', 'bizuno-api')));
+            throw new UnexpectedValueException( wp_kses_post ( __('Unable to update the transaction.', 'bizuno-payfabric')));
         }
     }
 
@@ -490,16 +461,17 @@ successCallback:handleResult, failureCallback:handleResult });
             $order->update_meta_data('_payment_status', 'completed');
             $order->payment_complete();
             if ($this->gateway->api_success_status == '1') {
-                $order->update_status('completed', sprintf(__('Card payment completed.', 'bizuno-api')));
+                $order->update_status('completed', sprintf(__('Card payment completed.', 'bizuno-payfabric')));
             }
             $order_id = $order->get_id();
             //update the transaction ID with the new capture transaction ID for refund use
-            update_post_meta($order_id, '_transaction_id', $result->TrxKey);
+            $order->update_meta_data('_transaction_id', $result->TrxKey);
+//            update_post_meta($order_id, '_transaction_id', $result->TrxKey); // Fails in HPOS
             do_action('woocommerce_payment_complete', $order_id);
             $order->save();
             return true;
         } else {
-            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Capture error!', 'bizuno-api' ) );
+            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Capture error!', 'bizuno-payfabric' ) );
             return;
         }
     }
@@ -525,11 +497,11 @@ successCallback:handleResult, failureCallback:handleResult });
         $result = json_decode($maxiPago->response);
         if (strtolower($result->Status) == 'approved') {
             $order->update_meta_data('_payment_status', 'cancelled');
-            $order->update_status('cancelled', sprintf(__('Payment void complete', 'bizuno-api')));
+            $order->update_status('cancelled', sprintf(__('Payment void complete', 'bizuno-payfabric')));
             $order->save();
             return true;
         } else {
-            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Void error!', 'bizuno-api' ));
+            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Void error!', 'bizuno-payfabric' ));
             return;
         }
     }

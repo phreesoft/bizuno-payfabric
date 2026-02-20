@@ -1,5 +1,7 @@
 <?php
 
+// added by PhreeSoft to allow dynamic assignment
+#[\AllowDynamicProperties]
 class payFabric_RequestBase
 {
 
@@ -130,31 +132,31 @@ class payFabric_RequestBase
     private function validateCall()
     {
         try {
-            if ((strlen($this->number) > 0) && (!ctype_digit((string)$this->number))) {
+            if ((strlen($this->number ?? '') > 0) && (!ctype_digit((string)$this->number))) {
                 throw new InvalidArgumentException("[PayFabric Class] Field 'number' accepts only numerical values.");
             }
-            if ((strlen($this->expMonth) > 0) && ((strlen($this->expMonth) < 2) || (!ctype_digit((string)$this->expMonth)))) {
+            if ((strlen($this->expMonth ?? '') > 0) && ((strlen($this->expMonth) < 2) || (!ctype_digit((string)$this->expMonth)))) {
                 throw new InvalidArgumentException("[PayFabric Class] Credit card expiration month must have 2 digits.");
             }
-            if ((strlen($this->expirationMonth) > 0) && ((strlen($this->expirationMonth) < 2) || (!ctype_digit((string)$this->expirationMonth)))) {
+            if ((strlen($this->expirationMonth ?? '') > 0) && ((strlen($this->expirationMonth) < 2) || (!ctype_digit((string)$this->expirationMonth)))) {
                 throw new InvalidArgumentException("[PayFabric Class] Credit card expiration month must have 2 digits.");
             }
-            if ((strlen($this->expYear) > 0) && ((strlen($this->expYear) < 4) || (!ctype_digit((string)$this->expYear)))) {
+            if ((strlen($this->expYear ?? '') > 0) && ((strlen($this->expYear) < 4) || (!ctype_digit((string)$this->expYear)))) {
                 throw new InvalidArgumentException("[PayFabric Class] Credit card expiration year must have 4 digits.");
             }
-            if ((strlen($this->expirationYear) > 0) && ((strlen($this->expirationYear) < 2) || (!ctype_digit((string)$this->expirationYear)))) {
+            if ((strlen($this->expirationYear ?? '') > 0) && ((strlen($this->expirationYear) < 2) || (!ctype_digit((string)$this->expirationYear)))) {
                 throw new InvalidArgumentException("[PayFabric Class] Credit card expiration year must have 4 digits.");
             }
-            if ((strlen($this->numberOfInstallments) > 0) && (!ctype_digit((string)$this->numberOfInstallments))) {
+            if ((strlen($this->numberOfInstallments ?? '') > 0) && (!ctype_digit((string)$this->numberOfInstallments))) {
                 throw new InvalidArgumentException("[PayFabric Class] Field 'numberOfInstallments' accepts only numerical values.");
             }
-            if ((strlen($this->chargeInterest) > 0) && (!in_array(strtoupper($this->chargeInterest), array("Y", "N")))) {
+            if ((strlen($this->chargeInterest ?? '') > 0) && (!in_array(strtoupper($this->chargeInterest), array("Y", "N")))) {
                 throw new InvalidArgumentException("[PayFabric Class] Field 'chargeInterest' only accepts Y and N as value.");
             }
-            if ((strlen($this->expirationDate) > 0) && (gmdate("Ymd", strtotime($this->expirationDate)) < gmdate("Ymd"))) {
+            if ((strlen($this->expirationDate ?? '') > 0) && (gmdate("Ymd", strtotime($this->expirationDate)) < gmdate("Ymd"))) {
                 throw new InvalidArgumentException("[PayFabric Class] Boleto expiration date can only be set in the future.");
             }
-            if ((strlen($this->instructions) > 0) && (strlen($this->instructions) > 350)) {
+            if ((strlen($this->instructions ?? '') > 0) && (strlen($this->instructions) > 350)) {
                 throw new InvalidArgumentException("[PayFabric Class] Boleto instructions cannot be longer than 350 characters.");
             }
         } catch (Exception $e) {
@@ -168,7 +170,7 @@ class payFabric_RequestBase
     public function processRequest()
     {
         try {
-            switch (strtolower($this->type)) {
+            switch (strtolower($this->type ?? '')) {
                 case "token":
                     $this->setToken();
                     break;

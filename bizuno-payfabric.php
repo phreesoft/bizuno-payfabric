@@ -22,6 +22,7 @@ class bizuno_payfabric
     public function __construct()
     {
         // WordPress Actions
+        add_action ( 'init',                                              [ $this, 'bizuno_payfabric_load_textdomain' ] );
         add_action ( 'plugins_loaded',                                    [ $this, 'bizuno_payfabric_plugins_loaded' ] );
         add_action ( 'woocommerce_checkout_process',                      [ $this, 'bizuno_payfabric_payment' ] );
         add_action ( 'woocommerce_checkout_update_order_meta',            [ $this, 'bizuno_payfabric_update_order_meta' ] );
@@ -31,11 +32,15 @@ class bizuno_payfabric
         add_filter ( 'woocommerce_available_payment_gateways',            [ $this, 'bizuno_api_disable_purchorder' ], 99, 1);
     }
 
+    function bizuno_payfabric_load_textdomain() {
+//        load_plugin_textdomain( 'bizuno-payfabric', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
+    }
+
     public function bizuno_payfabric_plugins_loaded()
     {
         if ( ! is_plugin_active ( 'woocommerce/woocommerce.php' ) ) { return; }
         // Load Woocommerce plugins only if WooCommerce is installed and active
-        bizuno_payfabric_gateway_class();
+//        bizuno_payfabric_gateway_class();
         bizuno_payment_po_method_init();
         WC()->frontend_includes();
         if ( class_exists ( 'WC_Payment_Gateway' ) ) { // get instance of WooCommerce for Payfabric
@@ -65,16 +70,19 @@ class bizuno_payfabric
         update_post_meta( $order_id, 'transaction', $_POST['transaction'] );
     }
 
-    public function bizuno_payfabric_order_meta($order) // Display field value on the order edit page
-    {
-        $method = get_post_meta( $order->id, '_payment_method', true );
-        if($method != 'custom') { return; }
-        $mobile = get_post_meta( $order->id, 'mobile', true );
-        $transaction = get_post_meta( $order->id, 'transaction', true );
-        echo '<p><strong>'. esc_html ( __( 'Mobile Number', 'bizuno-payfabric' ) ) . ':</strong> ' . esc_html ( $mobile ) . '</p>';
-        echo '<p><strong>'.esc_html ( __( 'Transaction ID', 'bizuno-payfabric' ) ) . ':</strong> ' . esc_html ($transaction ) . '</p>';
+    public function bizuno_payfabric_order_meta( $order ) {
+        // Safety check: Ensure $order is a valid WC_Order object
+        if ( ! is_a( $order, 'WC_Order' ) ) { return; }
+        $method = $order->get_payment_method();  // Modern getter (replaces get_post_meta for _payment_method)
+        if ( $method !== 'custom' ) { return; }
+        // Use get_meta() for custom fields (stored via $order->update_meta_data() elsewhere)
+        $mobile     = $order->get_meta( 'mobile', true );
+        $transaction = $order->get_meta( 'transaction', true );
+        // Output (unchanged except esc_html wrapping)
+        echo '<p><strong>' . esc_html( __( 'Mobile Number', 'bizuno-payfabric' ) ) . ':</strong> ' . esc_html( $mobile ) . '</p>';
+        echo '<p><strong>' . esc_html( __( 'Transaction ID', 'bizuno-payfabric' ) ) . ':</strong> ' . esc_html( $transaction ) . '</p>';
     }
-    
+
     public function bizuno_api_disable_purchorder( $available_gateways ) { // Disable PO Method if the user is not logged in or doesn't have a contact ID link to Bizuno
         $disable = false;
         $user = wp_get_current_user(); // Check to see if user has permission to use this method
@@ -97,6 +105,8 @@ function bizuno_payfabric_gateway_class()
     class WC_Gateway_PayFabric extends WC_Payment_Gateway
     {
         public $domain = 'bizuno-payfabric';
+        public $instructions;
+        public $order_status;
 
         public function __construct() {
             $this->id                 = 'custom';
@@ -184,6 +194,8 @@ function bizuno_payfabric_gateway_class()
 function bizuno_payment_po_method_init() {
     class WC_Gateway_PurchOrder extends WC_Payment_Gateway
     {
+        public $instructions;
+
         public function __construct()
         {
             $this->id                 = 'purchorder';

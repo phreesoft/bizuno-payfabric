@@ -72,7 +72,7 @@ class payFabric_Builder extends payFabric_RequestBase
         } else {
             throw new InvalidArgumentException("[PayFabric Class] Field 'Type' cannot be null.");
         }
-        if (strlen($this->id) > 0) {
+        if (strlen($this->id ?? '') > 0) {
             $this->_data["TrxUserDefine1"] = $this->id;
         }
         if (isset($this->Amount) && is_numeric($this->Amount)) {
@@ -96,59 +96,59 @@ class payFabric_Builder extends payFabric_RequestBase
 
     protected function setAddress()
     {
-        if (strlen($this->billingCity) > 0) {
+        if (strlen($this->billingCity ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["City"] = $this->billingCity;
         }
-        if (strlen($this->billingCountry) > 0) {
+        if (strlen($this->billingCountry ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Country"] = $this->billingCountry;
         }
-        if (strlen($this->customerId) > 0) {
+        if (strlen($this->customerId ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Customer"] = $this->customerId;
         }
-        if (strlen($this->billingEmail) > 0) {
+        if (strlen($this->billingEmail ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Email"] = $this->billingEmail;
         }
-        if (strlen($this->billingAddress1) > 0) {
+        if (strlen($this->billingAddress1 ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Line1"] = $this->billingAddress1;
         }
-        if (strlen($this->billingAddress2) > 0) {
+        if (strlen($this->billingAddress2 ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Line2"] = $this->billingAddress2;
         }
-        if (strlen($this->billingPhone) > 0) {
+        if (strlen($this->billingPhone ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Phone"] = $this->billingPhone;
         }
-        if (strlen($this->billingState) > 0) {
+        if (strlen($this->billingState ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["State"] = $this->billingState;
         }
-        if (strlen($this->billingPostalCode) > 0) {
+        if (strlen($this->billingPostalCode ?? '') > 0) {
             $this->_data['Document']["DefaultBillTo"]["Zip"] = $this->billingPostalCode;
         }
 
-        if (strlen($this->shippingCity) > 0) {
+        if (strlen($this->shippingCity ?? '') > 0) {
             $this->_data["Shipto"]["City"] = $this->shippingCity;
         }
-        if (strlen($this->shippingCountry) > 0) {
+        if (strlen($this->shippingCountry ?? '') > 0) {
             $this->_data["Shipto"]["Country"] = $this->shippingCountry;
         }
-        if (strlen($this->customerId) > 0) {
+        if (strlen($this->customerId ?? '') > 0) {
             $this->_data["Shipto"]["Customer"] = $this->customerId;
         }
-        if (strlen($this->shippingEmail) > 0) {
+        if (strlen($this->shippingEmail ?? '') > 0) {
             $this->_data["Shipto"]["Email"] = $this->shippingEmail;
         }
-        if (strlen($this->shippingAddress1) > 0) {
+        if (strlen($this->shippingAddress1 ?? '') > 0) {
             $this->_data["Shipto"]["Line1"] = $this->shippingAddress1;
         }
-        if (strlen($this->shippingAddress2) > 0) {
+        if (strlen($this->shippingAddress2 ?? '') > 0) {
             $this->_data["Shipto"]["Line2"] = $this->shippingAddress2;
         }
-        if (strlen($this->shippingPhone) > 0) {
+        if (strlen($this->shippingPhone ?? '') > 0) {
             $this->_data["Shipto"]["Phone"] = $this->shippingPhone;
         }
-        if (strlen($this->shippingState) > 0) {
+        if (strlen($this->shippingState ?? '') > 0) {
             $this->_data["Shipto"]["State"] = $this->shippingState;
         }
-        if (strlen($this->shippingPostalCode) > 0) {
+        if (strlen($this->shippingPostalCode ?? '') > 0) {
             $this->_data["Shipto"]["Zip"] = $this->shippingPostalCode;
         }
     }
@@ -177,7 +177,7 @@ class payFabric_Builder extends payFabric_RequestBase
             }
         }
         //Set UserDefined
-        if (strlen($this->pluginName) > 0 && strlen($this->pluginVersion) > 0) {
+        if (strlen($this->pluginName ?? '') > 0 && strlen($this->pluginVersion ?? '') > 0) {
             $this->_data["Document"]["UserDefined"] = array(
                 array('Name' => 'PluginName', "Value" => $this->pluginName),
                 array('Name' => 'PluginVersion', "Value" => $this->pluginVersion)
