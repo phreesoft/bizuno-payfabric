@@ -55,14 +55,14 @@ class PayFabric extends WC_Payment_Gateway
         $this->version = '2.0.0';
 
         $this->id = 'payfabric';
-        $this->method_title = __('PayFabric', 'bizuno-payfabric');
-        $this->method_description = __('PayFabric gateway sends customers to PayFabric to enter their payment information and redirects back to shop when the payment was completed.', 'bizuno-payfabric');
-        //$this->order_button_text = __('Proceed to PayFabric', 'bizuno-payfabric');
+        $this->method_title = __('PayFabric', 'payfabric-gateway-woocommerce');
+        $this->method_description = __('PayFabric gateway sends customers to PayFabric to enter their payment information and redirects back to shop when the payment was completed.', 'payfabric-gateway-woocommerce');
+        //$this->order_button_text = __('Proceed to PayFabric', 'payfabric-gateway-woocommerce');
 
         $this->title = $this->get_option('title');
         $this->description = $this->get_option('description');
         $this->testmode = 'yes' === $this->get_option('testmode', 'no');
-        $this->icon = apply_filters('bizuno-payfabric', plugin_dir_url(__FILE__) . 'assets/images/logo.png');
+        $this->icon = apply_filters('payfabric-gateway-woocommerce', plugin_dir_url(__FILE__) . 'assets/images/logo.png');
         $this->api_merchant_id = defined('PF_OAUTH2_ID') && !empty(PF_OAUTH2_ID) ? PF_OAUTH2_ID : $this->get_option('api_merchant_id');
         $this->api_password    = defined('PF_OAUTH2_PW') && !empty(PF_OAUTH2_PW) ? PF_OAUTH2_PW : $this->get_option('api_password');
         $this->api_success_status = $this->get_option('api_success_status');
@@ -93,7 +93,7 @@ class PayFabric extends WC_Payment_Gateway
                 $this->enqueue_styles();
                 $this->enqueue_js();
                 $payfabric_request = new PayFabric_Gateway_Request($this);
-                $payfabric_request->generate_payfabric_gateway_form(null, $this->testmode);
+                echo $payfabric_request->generate_payfabric_gateway_form(null, $this->testmode);
             }
         } catch (Exception $e) {
             wc_print_notice($e->getMessage(), 'error');
@@ -213,7 +213,7 @@ class PayFabric extends WC_Payment_Gateway
             $order = wc_get_order($order_id);
             $payfabric_request = new PayFabric_Gateway_Request($this);
 
-            $payfabric_request->generate_payfabric_gateway_form($order, $this->testmode);
+            echo $payfabric_request->generate_payfabric_gateway_form($order, $this->testmode);
         } catch (Exception $e) {
             wc_print_notice($e->getMessage(), 'error');
         }
@@ -239,8 +239,8 @@ class PayFabric extends WC_Payment_Gateway
         if($order->get_payment_method() == 'payfabric') {
             $transaction_id = $order->get_meta('_transaction_id', true);
             if (!empty($transaction_id)) {
-                echo wp_kses_post ( '<h3>' . $this->method_title . ' ID </h3>' );
-                echo wp_kses_post ( "<p>$transaction_id</p>" );
+                echo '<h3>' . $this->method_title . ' ID </h3>';
+                echo "<p>$transaction_id</p>";
             }
         }
     }
@@ -269,13 +269,13 @@ class PayFabric extends WC_Payment_Gateway
     {
         try {
             $raw_post = file_get_contents('php://input');
-            $parts = wp_parse_url($raw_post);
+            $parts = parse_url($raw_post);
             parse_str($parts['path'], $query);
             $this->logging('Gateway post callback: ' . json_encode($query));
             if (isset($query['TrxKey'])) {
                 $merchantTxId = $query['TrxKey'];
             } else {
-                return __('Bad identifier.', 'bizuno-payfabric');
+                return __('Bad identifier.', 'payfabric-gateway-woocommerce');
             }
 
             $payfabric_request = new PayFabric_Gateway_Request($this);
@@ -344,7 +344,7 @@ class PayFabric extends WC_Payment_Gateway
             $actions = array();
         }
 
-        $actions['payfabric_capture_charge'] = esc_html__('Capture Online', 'bizuno-payfabric');
+        $actions['payfabric_capture_charge'] = esc_html__('Capture Online');
 
         return $actions;
     }
@@ -372,7 +372,7 @@ class PayFabric extends WC_Payment_Gateway
             $actions = array();
         }
 
-        $actions['payfabric_void_charge'] = esc_html__('VOID Online', 'bizuno-payfabric' );
+        $actions['payfabric_void_charge'] = esc_html__('VOID Online');
 
         return $actions;
     }
@@ -430,7 +430,7 @@ class PayFabric extends WC_Payment_Gateway
             $testmode = isset($post_data[$api_testmode]) ? $post_data[$api_testmode] : null;
             $payment_action = isset($post_data[$api_payment_action]) ? $post_data[$api_payment_action] : null;
             if (empty($merchant_id) || empty($merchant_password)) {
-                WC_Admin_Settings::add_error(__('Device ID or Password cannot be blank', 'bizuno-payfabric'));
+                WC_Admin_Settings::add_error(__('Device ID or Password cannot be blank', 'payfabric-gateway-woocommerce'));
             } else {
                 $payfabric_request = new PayFabric_Gateway_Request($this);
                 $payfabric_request->do_check_gateway($testmode, $merchant_id, $merchant_password, $payment_action);
@@ -443,11 +443,11 @@ class PayFabric extends WC_Payment_Gateway
 
     public function get_session()
     {
-        echo wp_kses_post ( wp_send_json_success(
+        echo wp_send_json_success(
             array(
                 'token' => WC()->session->get('transaction_token')
             )
-        ) );
+        );
         wp_die();
     }
 

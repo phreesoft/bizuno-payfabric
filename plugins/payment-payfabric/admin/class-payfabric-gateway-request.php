@@ -72,7 +72,7 @@ class PayFabric_Gateway_Request
     //Generate transaction data
     private function get_payfabric_gateway_post_args($order)
     {
-        $parse_result = wp_parse_url(site_url());
+        $parse_result = parse_url(site_url());
         if (isset($parse_result['port'])) {
             $allowOriginUrl = $parse_result['scheme'] . "://" . $parse_result['host'] . ":" . $parse_result['port'];
         } else {
@@ -187,7 +187,7 @@ class PayFabric_Gateway_Request
             return false;
         }
         try {
-            $maxiPago = new payFabric_payments;
+            $maxiPago = new payments;
             $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
             // Set your credentials before any other transaction methods
@@ -209,17 +209,50 @@ class PayFabric_Gateway_Request
         $order_id = $result->TrxUserDefine1;
         $order = wc_get_order($order_id);
         $order_status = $order->get_status();
-error_log("order_id = $order_id and status = $status and transState = $transactionState and order_status = $order_status order is an object = ".(is_object($order)? 'true' : 'false'));
-// This logic was completely re-written and simplified for Bizuno by PhreeSoft
-        if ( $status == "approved" ) {
-            $order->payment_complete();  // <-- Fires woocommerce_payment_complete automatically!
-            $order->update_meta_data( '_payment_status', 'processing' );
-            $order->add_order_note( sprintf( __( 'Card payment authorized via PayFabric.', 'bizuno-payfabric' ) ) );
-        } else {
-            if ( $order_status !== 'failed' ) {
-                $order->update_status( 'failed', sprintf( __( 'Card payment failed.', 'bizuno-payfabric' ) ) );
+        if ($status == "approved") {
+            
+            // commented out by Phreesoft to change order status after payment finishes pending
+//            if ($transactionState == "pending capture") {
+//                if ($order_status != 'on-hold') {
+//                    //Auth transaction
+//                    update_post_meta($order->get_id(), '_payment_status', 'on-hold');
+//                    $order->update_status('on-hold', sprintf(__('Card payment authorized.', 'payfabric-gateway-woocommerce')));
+//
+//                    // Reduce stock levels
+//                    wc_reduce_stock_levels($order_id);
+//                }
+                
+            // set order status to 'processing' instead of 'on hold'
+            if ($transactionState == "pending capture") {
+                if ($order_status != 'processing') {
+                    // Auth transaction
+                    $order->update_meta_data( '_payment_status', 'processing' );
+                    //update_post_meta($order->get_id(), '_payment_status', 'processing');
+                    $order->update_status('processing', sprintf(__('Card payment authorized via PayFabric.', 'payfabric-gateway-woocommerce')));
+                    
+                    // Reduce stock levels
+                    wc_reduce_stock_levels($order_id);
+                }
             }
-            $order->save();  // Persist meta/note/status changes (HPOS-safe)
+            } elseif (in_array($transactionState, array('pending settlement', 'settled', 'captured'))) {
+                if ($order_status != 'completed' && $order_status != 'processing') {
+                    //Purchase transaction
+                    $order->update_meta_data( '_payment_status', 'completed' );
+//                    update_post_meta($order->get_id(), '_payment_status', 'completed');
+                    $order->payment_complete();
+                    // commented out by Phreesoft to prevent orders from being tagged 'complete'
+//                    if ($this->gateway->api_success_status == '1') {
+//                        $order->update_status('completed', sprintf(__('Card payment completed.', 'payfabric-gateway-woocommerce')));
+//                    }
+                    //                 do_action( 'woocommerce_payment_complete', $order_id);
+
+                    // Reduce stock levels
+                    wc_reduce_stock_levels($order_id);
+                }
+        } else {
+            if ($order_status != 'failed') {
+                $order->update_status('failed', sprintf(__('Card payment failed.', 'payfabric-gateway-woocommerce')));
+            }
             return;
         }
 
@@ -252,34 +285,32 @@ error_log("order_id = $order_id and status = $status and transState = $transacti
             'session' => $token,
             'disableCancel' => true,
             'acceptedPaymentMethods'=> $acceptedPaymentMethods
-        ); ?>
-<div id="cashierDiv"></div>
-<script type="text/javascript" src="<?php echo esc_url( $jsUrl ); ?>"></script>
-<script type="text/javascript">
-function handleResult(data) {
-    if (data.RespStatus == "Approved") {
-        document.getElementById("TrxKey").value = data.TrxKey;
-        document.getElementById("payForm").submit();
-    } else {
-        setTimeout(function(){location.reload();}, 3000);
-    }
-}
-new payfabricpayments({
-<?php
+        );
+        $payfabric_form[] = '<div id="cashierDiv"></div>';
+        $payfabric_form[] = '<script type="text/javascript" src="' . $jsUrl . '"></script>';
+        $payfabric_form[] = '<script type="text/javascript">';
+        $payfabric_form[] = 'function handleResult(data) {';
+        $payfabric_form[] = 'if(data.RespStatus == "Approved"){';
+        $payfabric_form[] = 'document.getElementById("TrxKey").value = data.TrxKey;';
+        $payfabric_form[] = 'document.getElementById("payForm").submit();}else{ setTimeout(function(){location.reload();}, 3000); }';
+        $payfabric_form[] = '}';
+        $payfabric_form[] = 'new payfabricpayments({';
         foreach ($payfabric_cashier_args as $key => $value) {
-            if (is_array($value)) { echo esc_attr($key) . ':' . json_encode($value) . ','; }
-            else                  { echo esc_attr($key) . ':"' . esc_attr($value) . '",'; }
+            if (is_array($value)) $payfabric_form[] = esc_attr($key) . ' : ' . json_encode($value) . ',';
+            else    $payfabric_form[] = esc_attr($key) . ' : "' . esc_attr($value) . '",';
         }
-?>
-successCallback:handleResult, failureCallback:handleResult });
-</script>';
-<?php
+        $payfabric_form[] = 'successCallback:handleResult,';
+        $payfabric_form[] = 'failureCallback:handleResult,';
+        $payfabric_form[] = '});';
+        $payfabric_form[] = '</script>';
+
+        return $payfabric_form;
     }
 
     //Integrate PayFabric Cashier UI ready to pay
     public function generate_payfabric_gateway_form($order, $sandbox)
     {
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -325,7 +356,7 @@ successCallback:handleResult, failureCallback:handleResult });
             if (is_object(payFabric_RequestBase::$logger)) {
                 payFabric_RequestBase::$logger->logCrit($maxiPago->response);
             }
-            throw new UnexpectedValueException( wp_kses_post ( $maxiPago->response ), 503);
+            throw new UnexpectedValueException($maxiPago->response, 503);
         }
         $maxiPago->token(array("Audience" => "PaymentPage", "Subject" => $responseTran->Key));
         $responseToken = json_decode($maxiPago->response);
@@ -333,20 +364,15 @@ successCallback:handleResult, failureCallback:handleResult });
             if (is_object(payFabric_RequestBase::$logger)) {
                 payFabric_RequestBase::$logger->logCrit($maxiPago->response);
             }
-            throw new UnexpectedValueException( wp_kses_post ( $maxiPago->response ), 503);
+            throw new UnexpectedValueException($maxiPago->response, 503);
         }
 
         switch ($this->gateway->api_payment_modes) {
             //api_payment_modes : array('Iframe','Redirect', 'direct')
-            case '0': ?>
-<form id="payForm" action="<?php echo esc_url ( $return_url ); ?>" method="get">
-    <input type="hidden" name="wcapi" value="payfabric"/>
-    <input type="hidden" id="TrxKey" name="TrxKey" value=""/>
-    <input type="hidden" name="key" value="<?php echo esc_html ( $order->get_order_key() ); ?>"/>
-</form>
-<?php
-                $this->generate_payfabric_gateway_iframe($jsUrl, $responseToken->Token, $sandbox);
-                return '';
+            case '0':
+                $payfabric_form[] = '<form id="payForm" action="' . $return_url;
+                $payfabric_form[] = '" method="get"><input type="hidden" name="wcapi" value="payfabric"/><input type="hidden" id="TrxKey" name="TrxKey" value=""/><input type="hidden" name="key" value="' . $order->get_order_key() . '"/></form>';
+                return implode('', array_merge($payfabric_form, $this->generate_payfabric_gateway_iframe($jsUrl, $responseToken->Token, $sandbox)));
             case '1':
                 $form_data = array();
                 $form_data['token'] = $responseToken->Token;
@@ -356,22 +382,17 @@ successCallback:handleResult, failureCallback:handleResult });
                 foreach ($form_data as $key => $value) {
                     $form_html .= "<input type='hidden' name='" . htmlentities($key) . "' value='" . htmlentities($value) . "'>";
                 }
-                $form_html .= '<button type="submit" class="button alt">' . __('Pay with PayFabric', 'bizuno-payfabric') . '</button></form>';
+                $form_html .= '<button type="submit" class="button alt">' . __('Pay with PayFabric', 'payfabric-gateway-woocommerce') . '</button> </form>';
                 return $form_html;
             case '2':
                 $acceptedPaymentMethods = array("CreditCard","ECheck");
                 WC()->session->set('transaction_key', $responseTran->Key);
                 WC()->session->set('transaction_token', $responseToken->Token);
-?>
-<script type="text/javascript">var ajaxurl="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>";</script>
-<form id="payForm" action="" method="get">
-    <input type="hidden" name="wcapi" value="payfabric"/>
-    <input type="hidden" id="TrxKey" name="TrxKey" value=""/>
-    <input type="hidden" id="key" name="key" value=""/>
-</form>
-<?php
-                $this->generate_payfabric_gateway_iframe($jsUrl, $responseToken->Token, $sandbox, $acceptedPaymentMethods);
-                return '';
+                $payfabric_form[] = '<script type="text/javascript">';
+                $payfabric_form[] = 'var ajaxurl = "' . admin_url('admin-ajax.php') . '";</script>';
+                $payfabric_form[] = '<form id="payForm" action="';
+                $payfabric_form[] = '" method="get"><input type="hidden" name="wcapi" value="payfabric"/><input type="hidden" id="TrxKey" name="TrxKey" value=""/><input type="hidden" id="key" name="key" value=""/></form>';
+                return implode('', array_merge($payfabric_form, $this->generate_payfabric_gateway_iframe($jsUrl, $responseToken->Token, $sandbox, $acceptedPaymentMethods)));
         }
     }
 
@@ -383,7 +404,7 @@ successCallback:handleResult, failureCallback:handleResult });
             throw new UnexpectedValueException('Miss merchant configuration info', 503);
         }
 
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -401,7 +422,7 @@ successCallback:handleResult, failureCallback:handleResult });
         if ($result->Result) {
             return true;
         } else {
-            throw new UnexpectedValueException( wp_kses_post ( __('Unable to update the transaction.', 'bizuno-payfabric')));
+            throw new UnexpectedValueException( __('Unable to update the transaction.'));
         }
     }
 
@@ -413,7 +434,7 @@ successCallback:handleResult, failureCallback:handleResult });
             return new WP_Error('invalid_order', 'miss merchant configuration info');
         }
 
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -444,7 +465,7 @@ successCallback:handleResult, failureCallback:handleResult });
             return new WP_Error('invalid_order', 'miss merchant configuration info');
         }
 
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -457,11 +478,11 @@ successCallback:handleResult, failureCallback:handleResult });
         $result = json_decode($maxiPago->response);
 
         if (strtolower($result->Status) == 'approved') {
-            $order->add_order_note ( sprintf( 'Capture charge complete (Amount: %s)', $amount));
+            $order->add_order_note(sprintf(__('Capture charge complete (Amount: %s)'), $amount));
             $order->update_meta_data('_payment_status', 'completed');
             $order->payment_complete();
             if ($this->gateway->api_success_status == '1') {
-                $order->update_status('completed', sprintf(__('Card payment completed.', 'bizuno-payfabric')));
+                $order->update_status('completed', sprintf(__('Card payment completed.', 'payfabric-gateway-woocommerce')));
             }
             $order_id = $order->get_id();
             //update the transaction ID with the new capture transaction ID for refund use
@@ -471,7 +492,7 @@ successCallback:handleResult, failureCallback:handleResult });
             $order->save();
             return true;
         } else {
-            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Capture error!', 'bizuno-payfabric' ) );
+            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Capture error!'));
             return;
         }
     }
@@ -484,7 +505,7 @@ successCallback:handleResult, failureCallback:handleResult });
             return new WP_Error('invalid_order', 'miss merchant configuration info');
         }
 
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -497,11 +518,11 @@ successCallback:handleResult, failureCallback:handleResult });
         $result = json_decode($maxiPago->response);
         if (strtolower($result->Status) == 'approved') {
             $order->update_meta_data('_payment_status', 'cancelled');
-            $order->update_status('cancelled', sprintf(__('Payment void complete', 'bizuno-payfabric')));
+            $order->update_status('cancelled', sprintf(__('Payment void complete', 'payfabric-gateway-woocommerce')));
             $order->save();
             return true;
         } else {
-            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Void error!', 'bizuno-payfabric' ));
+            $order->add_order_note(!empty($result->Message) ? $result->Message : __('Void error!'));
             return;
         }
     }
@@ -509,7 +530,7 @@ successCallback:handleResult, failureCallback:handleResult });
     //Do the payment gateway check
     public function do_check_gateway($sandbox, $api_merchant_id, $api_password, $payment_action)
     {
-        $maxiPago = new payFabric_payments;
+        $maxiPago = new payments;
         $maxiPago->setLogger(PayFabric_LOG_DIR, PayFabric_LOG_SEVERITY);
 
         // Set your credentials before any other transaction methods
@@ -531,7 +552,7 @@ successCallback:handleResult, failureCallback:handleResult });
             if (is_object(payFabric_RequestBase::$logger)) {
                 payFabric_RequestBase::$logger->logCrit($maxiPago->response);
             }
-            throw new UnexpectedValueException( wp_kses_post ( $maxiPago->response ), 503);
+            throw new UnexpectedValueException($maxiPago->response, 503);
         }
         return $responseTran->Key;
     }
